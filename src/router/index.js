@@ -7,8 +7,20 @@ import ClassManagement from '../views/ClassManagement.vue'
 import Annotation2D from '../views/Annotation2D.vue'
 import Annotation3D from '../views/Annotation3D.vue'
 import AudioAnnotation from '../views/AudioAnnotation.vue'
+import RoleManagement from '../views/RoleManagement.vue'
+import QuestionTypeManagement from '../views/QuestionTypeManagement.vue'
+import QuestionManagement from '../views/QuestionManagement.vue'
+import LabelManagement from '../views/LabelManagement.vue'
 
 Vue.use(VueRouter)
+
+// 修复NavigationDuplicated错误
+const originalPush = VueRouter.prototype.push
+VueRouter.prototype.push = function push(location) {
+  return originalPush.call(this, location).catch(err => {
+    if (err.name !== 'NavigationDuplicated') throw err
+  })
+}
 
 const routes = [
   {
@@ -50,6 +62,30 @@ const routes = [
         name: 'AudioAnnotation',
         component: AudioAnnotation,
         meta: { title: '音频标注' }
+      },
+      {
+        path: 'role-management',
+        name: 'RoleManagement',
+        component: RoleManagement,
+        meta: { title: '角色管理' }
+      },
+      {
+        path: 'question-type-management',
+        name: 'QuestionTypeManagement',
+        component: QuestionTypeManagement,
+        meta: { title: '题库分类' }
+      },
+      {
+        path: 'question-management',
+        name: 'QuestionManagement',
+        component: QuestionManagement,
+        meta: { title: '题库管理' }
+      },
+      {
+        path: 'label-management',
+        name: 'LabelManagement',
+        component: LabelManagement,
+        meta: { title: '标签管理' }
       }
     ]
   },

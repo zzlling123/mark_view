@@ -36,7 +36,7 @@
         <a-table
           :columns="columns"
           :dataSource="classList"
-          :rowKey="record => record.directorId + record.className"
+          :rowKey="record => record.directorId + '_' + record.className"
           :pagination="pagination"
           :loading="loading"
           @change="handleTableChange"
@@ -46,7 +46,7 @@
               <a-button type="link" size="small" @click="() => handleEdit(record)">
                 <a-icon type="edit" />编辑
               </a-button>
-              <a-button type="link" size="small" @click="() => handleDelete(record)">
+              <a-button type="link" size="small" style="color: #ff4d4f" @click="() => handleDelete(record)">
                 <a-icon type="delete" />删除
               </a-button>
             </div>
@@ -82,7 +82,7 @@
           />
         </a-form-model-item>
         
-        <a-form-model-item label="班主任" prop="directorId">
+        <a-form-model-item label="班主任" prop="directorName">
           <a-input v-model="classForm.directorName" placeholder="请输入班主任姓名" />
         </a-form-model-item>
       </a-form-model>
@@ -125,56 +125,59 @@ export default {
           title: '创建时间',
           dataIndex: 'createTime',
           key: 'createTime',
-          sorter: true,
         },
         {
           title: '操作',
           key: 'action',
           scopedSlots: { customRender: 'action' },
-          width: 150,
         },
       ],
       // 班级列表数据
       classList: [],
-      // 分页配置
+      // 加载状态
+      loading: false,
+      // 分页信息
       pagination: {
         current: 1,
         pageSize: 10,
         total: 0,
         showSizeChanger: true,
         showQuickJumper: true,
-        showTotal: total => `共 ${total} 条`,
-        pageSizeOptions: ['10', '20', '30', '50'],
+        showTotal: total => `共 ${total} 条记录`,
       },
-      // 加载状态
-      loading: false,
-      
-      // 模态框相关
+      // 模态框标题
       modalTitle: '新增班级',
+      // 模态框显示状态
       modalVisible: false,
+      // 模态框加载状态
       modalLoading: false,
+      // 是否为编辑模式
       isEdit: false,
+      // 班级表单数据
       classForm: {
+        id: undefined,
         className: '',
         description: '',
         directorId: null,
         directorName: '',
       },
+      // 表单验证规则
       rules: {
         className: [
           { required: true, message: '请输入班级名称', trigger: 'blur' },
-          { max: 50, message: '班级名称不能超过50个字符', trigger: 'blur' },
+          { max: 50, message: '班级名称不能超过50个字符', trigger: 'blur' }
         ],
         description: [
-          { max: 200, message: '班级描述不能超过200个字符', trigger: 'blur' },
+          { max: 200, message: '班级描述不能超过200个字符', trigger: 'blur' }
         ],
         directorName: [
           { required: true, message: '请输入班主任姓名', trigger: 'blur' },
+          { max: 20, message: '班主任姓名不能超过20个字符', trigger: 'blur' }
         ],
       },
     };
   },
-  mounted() {
+  created() {
     this.fetchClassList();
   },
   methods: {
@@ -194,12 +197,13 @@ export default {
         params.className = this.searchParams.className;
       }
       
+      // 发送请求
       axios.post(API.CLASS.PAGE, params)
         .then(response => {
           if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
-            const data = response.data.data;
+            const data = response.data.data || {};
             
-            // 适配新的响应数据结构
+            // 设置班级列表数据
             this.classList = data.records || []; // 从records获取数据列表
             
             // 更新分页信息
@@ -246,6 +250,7 @@ export default {
       this.modalTitle = '新增班级';
       this.isEdit = false;
       this.classForm = {
+        id: undefined,
         className: '',
         description: '',
         directorId: null,
@@ -271,11 +276,32 @@ export default {
         okType: 'danger',
         cancelText: '取消',
         onOk: () => {
-          // 这里应该有一个实际的删除API调用
-          this.$message.success('删除成功（模拟）');
-          this.fetchClassList();
+          // 调用删除API
+          this.deleteClass(record.id);
         },
       });
+    },
+    
+    // 调用删除班级API
+    deleteClass(id) {
+      this.loading = true;
+      
+      axios.post(`${API.CLASS.DELETE}${id}`)
+        .then(response => {
+          if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
+            this.$message.success('删除班级成功');
+            this.fetchClassList();
+          } else {
+            this.$message.error(response.data?.msg || '删除班级失败');
+          }
+        })
+        .catch(error => {
+          console.error('删除班级失败:', error);
+          this.$message.error('删除班级失败，请稍后重试');
+        })
+        .finally(() => {
+          this.loading = false;
+        });
     },
     
     // 处理模态框确认
@@ -284,13 +310,26 @@ export default {
         if (valid) {
           this.modalLoading = true;
           
-          // 模拟API调用
-          setTimeout(() => {
-            this.modalLoading = false;
-            this.modalVisible = false;
-            this.$message.success(this.isEdit ? '编辑成功（模拟）' : '添加成功（模拟）');
-            this.fetchClassList();
-          }, 500);
+          // 根据是否是编辑模式，调用不同的API
+          const apiUrl = this.isEdit ? API.CLASS.UPDATE : API.CLASS.SAVE;
+          
+          axios.post(apiUrl, this.classForm)
+            .then(response => {
+              if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
+                this.$message.success(this.isEdit ? '编辑班级成功' : '新增班级成功');
+                this.modalVisible = false;
+                this.fetchClassList();
+              } else {
+                this.$message.error(response.data?.msg || (this.isEdit ? '编辑班级失败' : '新增班级失败'));
+              }
+            })
+            .catch(error => {
+              console.error(this.isEdit ? '编辑班级失败:' : '新增班级失败:', error);
+              this.$message.error(this.isEdit ? '编辑班级失败，请稍后重试' : '新增班级失败，请稍后重试');
+            })
+            .finally(() => {
+              this.modalLoading = false;
+            });
         }
       });
     },
@@ -320,6 +359,11 @@ export default {
 .table-operations {
   margin-bottom: 16px;
   text-align: right;
+}
+
+.action-buttons {
+  display: flex;
+  justify-content: space-between;
 }
 
 .action-buttons button {
