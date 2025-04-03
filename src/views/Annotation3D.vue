@@ -11,6 +11,27 @@
                 <a-button type="primary" @click="loadDemoModel">
                   <a-icon type="experiment" /> 加载演示模型
                 </a-button>
+                
+                <a-dropdown :disabled="loading">
+                  <a-menu slot="overlay">
+                    <a-menu-item key="1">
+                      <a-upload
+                        :beforeUpload="handlePCDFileUpload"
+                        :showUploadList="false"
+                        accept=".pcd"
+                      >
+                        <span><a-icon type="upload" /> 上传PCD文件</span>
+                      </a-upload>
+                    </a-menu-item>
+                    <a-menu-item key="2" @click="loadPCDFile">
+                      <span><a-icon type="cloud-download" /> 加载示例PCD</span>
+                    </a-menu-item>
+                  </a-menu>
+                  <a-button :loading="loading">
+                    <a-icon type="cloud" /> 点云文件 <a-icon type="down" />
+                  </a-button>
+                </a-dropdown>
+                
                 <a-button :disabled="!modelLoaded" @click="resetCamera">
                   <a-icon type="reload" /> 重置视图
                 </a-button>
@@ -34,7 +55,15 @@
               </a-radio-group>
             </div>
             
-            <div class="model-container" ref="container">
+            <div 
+              class="model-container" 
+              ref="container"
+              @dragover.prevent
+              @dragenter.prevent="handleDragEnter"
+              @dragleave.prevent="handleDragLeave"
+              @drop.prevent="handleDrop"
+              :class="{ 'drag-over': isDragging }"
+            >
               <!-- Three.js 将在这里渲染 -->
               <div 
                 v-if="!modelLoaded" 
@@ -45,6 +74,12 @@
                     加载演示模型
                   </a-button>
                 </a-empty>
+              </div>
+              
+              <!-- 添加拖放提示 -->
+              <div v-if="isDragging" class="drag-overlay">
+                <a-icon type="cloud-upload" style="font-size: 48px; color: #1890ff" />
+                <p>释放鼠标上传PCD文件</p>
               </div>
             </div>
           </a-card>
@@ -158,6 +193,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { PCDLoader } from 'three/examples/jsm/loaders/PCDLoader.js';
 
 export default {
   name: 'Annotation3D',
@@ -181,7 +217,9 @@ export default {
       annotations: [],
       selectedAnnotationIndex: null,
       
-      animationId: null
+      animationId: null,
+      loading: false,
+      isDragging: false
     }
   },
   mounted() {
@@ -451,6 +489,166 @@ export default {
       };
       
       return colorMap[colorName] || 0x1890ff;
+    },
+    
+    // 添加加载PCD文件的方法
+    handlePCDFileUpload(file) {
+      // 检查文件类型
+      if (file.type !== '' && !file.name.endsWith('.pcd')) {
+        this.$message.error('只支持PCD格式的点云文件!');
+        return false;
+      }
+      
+      // 显示加载中状态
+      this.loading = true;
+      
+      // 创建文件读取器
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        // 创建PCDLoader
+        const loader = new PCDLoader();
+        
+        try {
+          // 检查文件内容是否有效
+          if (!e.target.result) {
+            throw new Error('文件内容为空');
+          }
+          
+          // 使用PCDLoader加载方法而非parse方法
+          // 我们需要通过Blob和URL创建一个可以被loader加载的URL
+          const blob = new Blob([e.target.result], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          
+          loader.load(
+            url,
+            (points) => {
+              // 清理URL
+              URL.revokeObjectURL(url);
+              
+              // 移除之前的模型（如果有）
+              if (this.model) {
+                this.scene.remove(this.model);
+              }
+              
+              // 添加点云到场景
+              this.scene.add(points);
+              this.model = points;
+              
+              // 重置相机视角
+              this.resetCamera();
+              
+              this.modelLoaded = true;
+              this.modelInfo = {
+                name: file.name,
+                vertices: points.geometry.attributes.position ? points.geometry.attributes.position.count : 0,
+                type: 'PCD点云'
+              };
+              
+              this.$message.success('点云文件加载成功');
+              this.loading = false;
+            },
+            (xhr) => {
+              // 进度回调
+              console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            },
+            (error) => {
+              // 错误回调
+              console.error('点云文件加载失败:', error);
+              this.$message.error('点云文件加载失败: ' + error.message);
+              this.loading = false;
+              URL.revokeObjectURL(url);
+            }
+          );
+        } catch (error) {
+          console.error('点云文件处理失败:', error);
+          this.$message.error('点云文件处理失败: ' + error.message);
+          this.loading = false;
+        }
+      };
+      
+      reader.onerror = (event) => {
+        console.error('文件读取失败:', event);
+        this.$message.error('文件读取失败');
+        this.loading = false;
+      };
+      
+      // 以ArrayBuffer方式读取文件
+      reader.readAsArrayBuffer(file);
+      
+      return false; // 阻止默认上传行为
+    },
+    
+    loadPCDFile() {
+      this.loading = true;
+      this.$message.loading({ content: '正在加载示例点云文件...', key: 'pcdLoading', duration: 0 });
+      
+      // 初始化Three.js（如果还没初始化）
+      if (!this.scene) {
+        this.initThree();
+      }
+      
+      // 创建PCDLoader
+      const loader = new PCDLoader();
+      
+      // 加载public目录下的PCD文件
+      loader.load(
+        '/pcd/23507.361176.pcd', // 相对于public目录的路径
+        (points) => {
+          // 移除之前的模型（如果有）
+          if (this.model) {
+            this.scene.remove(this.model);
+          }
+          
+          // 添加点云到场景
+          this.scene.add(points);
+          this.model = points;
+          
+          // 重置相机视角
+          this.resetCamera();
+          
+          this.modelLoaded = true;
+          this.modelInfo = {
+            name: '23507.361176.pcd',
+            vertices: points.geometry.attributes.position ? points.geometry.attributes.position.count : 0,
+            type: 'PCD点云'
+          };
+          
+          this.loading = false;
+          this.$message.success({ content: 'PCB点云加载成功', key: 'pcdLoading' });
+        },
+        (xhr) => {
+          // 加载进度回调
+          const percent = Math.round((xhr.loaded / xhr.total) * 100);
+          this.$message.loading({ content: `正在加载示例点云文件... ${percent}%`, key: 'pcdLoading', duration: 0 });
+        },
+        (error) => {
+          // 错误回调
+          console.error('点云加载失败:', error);
+          this.$message.error({ content: '点云加载失败: ' + error.message, key: 'pcdLoading' });
+          this.loading = false;
+        }
+      );
+    },
+    
+    handleDragEnter() {
+      this.isDragging = true;
+    },
+    
+    handleDragLeave() {
+      this.isDragging = false;
+    },
+    
+    handleDrop(event) {
+      this.isDragging = false;
+      const files = event.dataTransfer.files;
+      if (files.length) {
+        const file = files[0];
+        if (file.name.endsWith('.pcd')) {
+          this.handlePCDFileUpload(file);
+        } else {
+          this.$message.error('只支持PCD格式的点云文件!');
+        }
+      }
     }
   }
 }
@@ -477,6 +675,7 @@ export default {
   background-color: #f0f0f0;
   border: 1px solid #eee;
   overflow: hidden;
+  transition: border-color 0.3s;
 }
 
 .model-placeholder {
@@ -508,5 +707,30 @@ export default {
 
 .selected-item {
   background-color: #e6f7ff;
+}
+
+.drag-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 10;
+}
+
+.drag-overlay p {
+  margin-top: 16px;
+  font-size: 16px;
+  color: #1890ff;
+}
+
+.drag-over {
+  border: 2px dashed #1890ff;
+  background-color: rgba(24, 144, 255, 0.05);
 }
 </style> 
