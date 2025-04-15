@@ -129,6 +129,16 @@
                     </a-button>
                   </a-list-item>
                 </a-list>
+                
+                <a-button 
+                  type="primary" 
+                  style="margin-top: 10px; width: 100%;" 
+                  icon="code" 
+                  @click="printAnnotationData"
+                  :disabled="annotations.length === 0"
+                >
+                  打印标注数据到控制台
+                </a-button>
               </div>
               
               <a-divider />
@@ -489,6 +499,40 @@ export default {
       };
       
       return colorMap[colorName] || 0x1890ff;
+    },
+    
+    printAnnotationData() {
+      // 创建可以序列化的标注数据
+      const serializableAnnotations = this.annotations.map(anno => ({
+        label: anno.label,
+        color: anno.color,
+        description: anno.description,
+        position: {
+          x: anno.position.x,
+          y: anno.position.y,
+          z: anno.position.z
+        }
+      }));
+      
+      // 打印标注数据到控制台
+      console.log('3D标注数据结构:');
+      console.log(JSON.stringify(serializableAnnotations, null, 2));
+      
+      // 统计信息
+      const stats = {
+        总标注数: this.annotations.length,
+        标签统计: {}
+      };
+      
+      this.annotations.forEach(annotation => {
+        const label = annotation.label || '未命名点';
+        stats.标签统计[label] = (stats.标签统计[label] || 0) + 1;
+      });
+      
+      console.log('标注统计信息:');
+      console.log(stats);
+      
+      this.$message.success('3D标注数据已打印到控制台，请按F12查看');
     },
     
     // 添加加载PCD文件的方法

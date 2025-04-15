@@ -17,6 +17,7 @@ export default {
     SAVE: `${API_BASE_URL}/class_info/save`,
     UPDATE: `${API_BASE_URL}/class_info/update`,
     DELETE: `${API_BASE_URL}/class_info/delete/`,
+    GET_LIST: `${API_BASE_URL}/class_info/getList`,
   },
   // 用户相关
   USER: {
@@ -51,5 +52,18 @@ export default {
   // 标签管理相关
   LABEL: {
     SAVE: `${API_BASE_URL}/question/saveQuestionLabel`,
+    GET_LIST: `${API_BASE_URL}/question/getLabelList`,
+  },
+  // 考试管理相关
+  EXAM: {
+    PAGE: `${API_BASE_URL}/exam/page`,
+    DETAIL: `${API_BASE_URL}/exam/detail/`,
+    SAVE: `${API_BASE_URL}/exam/save`,
+    UPDATE: `${API_BASE_URL}/exam/update`, 
+    EXAM_TYPE_SET_TEMPLATE: `${API_BASE_URL}/exam/examTypeSetTemplate`,
+    IMPORT_EXAM_PAGE_SET_POINT: `${API_BASE_URL}/exam/importExamPageSetPoint`,
+    GET_ERROR_EXAM_PAGE_SET_POINT: `${API_BASE_URL}/exam/getErrorExamPageSetPoint`,
+    ROLL_MAKING: `${API_BASE_URL}/exam-page-user-question/rollMaking`,
+    GET_PROGRESS: `${API_BASE_URL}/exam-page-user-question/getProgress`,
   }
 }; 

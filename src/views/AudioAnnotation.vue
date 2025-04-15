@@ -124,6 +124,16 @@
                 {{ formatTime(record.start) }} - {{ formatTime(record.end) }}
               </template>
             </a-table>
+            
+            <a-button 
+              type="primary" 
+              style="margin-top: 10px; width: 100%;" 
+              icon="code" 
+              @click="printRegionData"
+              :disabled="regions.length === 0"
+            >
+              打印片段标注数据到控制台
+            </a-button>
           </a-card>
         </a-col>
       </a-row>
@@ -155,6 +165,16 @@
                 >定位</a-button>
               </template>
             </a-table>
+            
+            <a-button 
+              type="primary" 
+              style="margin-top: 10px; width: 100%;" 
+              icon="code" 
+              @click="printMarkerData"
+              :disabled="markers.length === 0"
+            >
+              打印点标注数据到控制台
+            </a-button>
           </a-card>
         </a-col>
         
@@ -789,7 +809,58 @@ export default {
       }
       
       return new Blob([ab], { type: mimeString });
-    }
+    },
+    
+    printRegionData() {
+      // 为了更好的输出，创建可序列化的区域数据
+      const serializableRegions = this.regions.map(region => ({
+        id: region.id,
+        start: region.start,
+        end: region.end,
+        duration: region.end - region.start,
+        label: region.data?.label || '未命名片段',
+        content: region.data?.content || ''
+      }));
+      
+      // 打印区域标注数据到控制台
+      console.log('音频片段标注数据结构:');
+      console.log(JSON.stringify(serializableRegions, null, 2));
+      
+      // 统计信息
+      const stats = {
+        总片段数: serializableRegions.length,
+        总时长: serializableRegions.reduce((sum, region) => sum + (region.duration || 0), 0).toFixed(2) + '秒',
+        平均片段长度: (serializableRegions.reduce((sum, region) => sum + (region.duration || 0), 0) / 
+                  (serializableRegions.length || 1)).toFixed(2) + '秒'
+      };
+      
+      console.log('片段标注统计信息:');
+      console.log(stats);
+      
+      this.$message.success('音频片段标注数据已打印到控制台，请按F12查看');
+    },
+    
+    printMarkerData() {
+      // 打印点标注数据到控制台
+      console.log('音频点标注数据结构:');
+      console.log(JSON.stringify(this.markers, null, 2));
+      
+      // 统计信息
+      const stats = {
+        总标注点数: this.markers.length,
+        标签类型统计: {}
+      };
+      
+      this.markers.forEach(marker => {
+        const type = this.getTypeLabel(marker.type);
+        stats.标签类型统计[type] = (stats.标签类型统计[type] || 0) + 1;
+      });
+      
+      console.log('点标注统计信息:');
+      console.log(stats);
+      
+      this.$message.success('音频点标注数据已打印到控制台，请按F12查看');
+    },
   },
   watch: {
     // 监听工具变化，更新拖拽选择状态

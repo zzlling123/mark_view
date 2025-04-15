@@ -11,6 +11,9 @@ import RoleManagement from '../views/RoleManagement.vue'
 import QuestionTypeManagement from '../views/QuestionTypeManagement.vue'
 import QuestionManagement from '../views/QuestionManagement.vue'
 import LabelManagement from '../views/LabelManagement.vue'
+import ExamManagement from '../views/ExamManagement.vue'
+import ExamList from '../views/ExamList.vue'
+import ExamPage from '../views/ExamPage.vue'
 
 Vue.use(VueRouter)
 
@@ -86,6 +89,24 @@ const routes = [
         name: 'LabelManagement',
         component: LabelManagement,
         meta: { title: '标签管理' }
+      },
+      {
+        path: 'exam-management',
+        name: 'ExamManagement',
+        component: ExamManagement,
+        meta: { title: '考试管理' }
+      },
+      {
+        path: 'exam-list',
+        name: 'ExamList',
+        component: ExamList,
+        meta: { title: '考试列表' }
+      },
+      {
+        path: 'exam-page/:examId',
+        name: 'ExamPage',
+        component: ExamPage,
+        meta: { title: '答题页面' }
       }
     ]
   },

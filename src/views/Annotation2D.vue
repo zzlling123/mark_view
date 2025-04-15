@@ -113,6 +113,15 @@
                     </div>
                   </a-list-item>
                 </a-list>
+                
+                <a-button 
+                  type="primary" 
+                  style="margin-top: 10px; width: 100%;" 
+                  icon="code" 
+                  @click="printAnnotationData"
+                >
+                  打印标注数据到控制台
+                </a-button>
               </div>
               
               <a-divider />
@@ -402,6 +411,27 @@ export default {
           this.$message.success('已移除图片');
         }
       });
+    },
+    printAnnotationData() {
+      // 打印标注数据到控制台
+      console.log('2D标注数据结构:');
+      console.log(JSON.stringify(this.annotationBoxes, null, 2));
+      
+      // 统计信息
+      const stats = {
+        总标注数: this.annotationBoxes.length,
+        标签统计: {}
+      };
+      
+      this.annotationBoxes.forEach(box => {
+        const label = box.label || '未命名';
+        stats.标签统计[label] = (stats.标签统计[label] || 0) + 1;
+      });
+      
+      console.log('标注统计信息:');
+      console.log(stats);
+      
+      this.$message.success('标注数据已打印到控制台，请按F12查看');
     }
   }
 }
