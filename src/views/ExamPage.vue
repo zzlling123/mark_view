@@ -34,16 +34,15 @@
         </div>
         
         <div class="question-buttons">
-          <a-tooltip v-for="item in questionProgress" :key="item.questionId" :title="`题目${item.num}: ${getStatusText(item.answerStatus)}`">
+          <a-tooltip v-for="item in examInfo.questionVoList" :key="item.numSort" :title="`题目${item.num}: ${getQuestionTypeText(item.shape)}`">
             <div 
               class="question-button" 
               :class="{
-                'active': currentQuestion && currentQuestion.questionId === item.questionId,
-                'completed': item.answerStatus === '2',
-                'in-progress': item.answerStatus === '1',
-                'not-started': item.answerStatus === '0'
+                'active': currentQuestion && currentQuestion.questionId === item.numSort,
+                'completed': item.userAnswer && item.userAnswer.length > 0,
+                'not-started': !item.userAnswer || item.userAnswer.length === 0
               }"
-              @click="switchQuestion(item.questionId)"
+              @click="switchQuestion(item.numSort)"
             >
               {{ item.num }}
             </div>
@@ -70,8 +69,10 @@
                   :value="option.optionKey"
                   class="option-item"
                 >
-                  <span class="option-key">{{ option.optionKey }}.</span>
-                  <span v-html="option.optionValue"></span>
+                  <span class="option-text">
+                    <span class="option-key">{{ option.optionKey }}.</span>
+                    <span class="option-value">{{ option.optionValue }}</span>
+                  </span>
                 </a-radio>
               </a-radio-group>
             </div>
@@ -85,8 +86,10 @@
                   :value="option.optionKey"
                   class="option-item"
                 >
-                  <span class="option-key">{{ option.optionKey }}.</span>
-                  <span v-html="option.optionValue"></span>
+                  <span class="option-text">
+                    <span class="option-key">{{ option.optionKey }}.</span>
+                    <span class="option-value">{{ option.optionValue }}</span>
+                  </span>
                 </a-checkbox>
               </a-checkbox-group>
             </div>
@@ -124,22 +127,60 @@
                 @change="handleAnswerChange"
               />
             </div>
+            
+            <div class="question-options" v-else-if="currentQuestion.questionType === 6">
+              <!-- 操作题 -->
+              <div class="operation-instructions">
+                <a-alert
+                  message="操作题"
+                  description="这是一道操作题，请点击'开始操作'按钮进入操作界面完成任务。"
+                  type="info"
+                  show-icon
+                />
+                <div class="operation-btn-container">
+                  <a-button 
+                    type="primary" 
+                    size="large"
+                    icon="play-circle" 
+                    @click="startOperation"
+                  >
+                    开始操作
+                  </a-button>
+                </div>
+              </div>
+            </div>
           </div>
           
           <div class="question-actions">
-            <a-button 
-              v-if="currentQuestionIndex > 0" 
-              @click="prevQuestion"
-            >
-              上一题
-            </a-button>
-            <a-button 
-              type="primary" 
-              @click="nextQuestion"
-              v-if="currentQuestionIndex < questionProgress.length - 1"
-            >
-              下一题
-            </a-button>
+            <div class="left-buttons">
+              <a-button 
+                v-if="currentQuestionIndex > 0" 
+                @click="prevQuestion"
+              >
+                <a-icon type="left" /> 上一题
+              </a-button>
+            </div>
+
+            <div class="center-buttons">
+              <a-button 
+                type="primary" 
+                @click="submitCurrentAnswer"
+                v-if="currentQuestion && (currentAnswer || currentAnswerMultiple.length > 0) && currentQuestion.questionType !== 6"
+                :loading="submitLoading"
+              >
+                提交答案 <a-icon type="check" />
+              </a-button>
+            </div>
+
+            <div class="right-buttons">
+              <a-button 
+                type="primary" 
+                @click="nextQuestion"
+                v-if="currentQuestionIndex < examInfo.questionVoList.length - 1"
+              >
+                下一题 <a-icon type="right" />
+              </a-button>
+            </div>
           </div>
         </div>
         
@@ -183,6 +224,7 @@
 
 <script>
 import axios from 'axios';
+import { Modal } from 'ant-design-vue';
 
 export default {
   name: 'ExamPage',
@@ -205,7 +247,8 @@ export default {
         score: 0,
         totalScore: 0
       },
-      canSubmit: false
+      canSubmit: false,
+      submitLoading: false
     };
   },
   created() {
@@ -237,16 +280,22 @@ export default {
     fetchExamInfo() {
       this.loading = true;
       
+      // 使用接口URL前缀
       axios.post('/exam-page-user/getExamUserInfo', {
         examId: this.examId
       })
         .then(response => {
           if (response.data && response.data.state === 'ok') {
             this.examInfo = response.data.data;
-            this.questions = this.examInfo.questionVoList || [];
             
-            // 获取答题进度
-            this.fetchQuestionProgress();
+            // 如果有题目，默认选中第一题
+            if (this.examInfo.questionVoList && this.examInfo.questionVoList.length > 0) {
+              this.switchQuestion(this.examInfo.questionVoList[0].numSort);
+              this.canSubmit = true;
+            }
+            
+            // 更新剩余时间
+            this.updateRemainingTime();
           } else {
             this.$message.error(response.data.msg || '获取考试信息失败');
           }
@@ -286,36 +335,97 @@ export default {
     
     // 切换题目
     switchQuestion(questionId) {
-      // 找到当前题目索引
-      const index = this.questions.findIndex(q => q.questionId === questionId);
-      if (index !== -1) {
-        this.currentQuestionIndex = index;
-        this.currentQuestion = this.questions[index];
+      // 从questionVoList中找到对应的题目
+      const question = this.examInfo.questionVoList.find(q => q.numSort === questionId);
+      
+      if (question) {
+        this.currentQuestionIndex = questionId - 1; // 题号是从1开始的，索引从0开始
+        this.currentQuestion = this.processQuestion(question);
         
-        // 如果是多选题，使用数组存储答案
-        if (this.currentQuestion.questionType === 2) {
-          this.currentAnswerMultiple = this.currentQuestion.answer ? this.currentQuestion.answer.split(',') : [];
+        // 根据题目类型设置答案
+        if (question.shape === '200') { // 多选题
+          this.currentAnswerMultiple = question.userAnswer ? question.userAnswer.split(',') : [];
           this.currentAnswer = '';
         } else {
-          this.currentAnswer = this.currentQuestion.answer || '';
+          this.currentAnswer = question.userAnswer || '';
           this.currentAnswerMultiple = [];
         }
       }
     },
     
+    // 处理题目数据，转换为界面可用的格式
+    processQuestion(question) {
+      // 确定题目类型
+      let questionType;
+      switch(question.shape) {
+        case '100': questionType = 1; break; // 单选题
+        case '200': questionType = 2; break; // 多选题
+        case '300': questionType = 4; break; // 填空题
+        case '400': questionType = 5; break; // 主观题
+        case '500': questionType = 6; break; // 操作题，使用单独的questionType
+        default: questionType = 1;
+      }
+      
+      // 处理选项
+      let options = [];
+      if (question.shape === '100' || question.shape === '200') {
+        try {
+          // 尝试解析选项字符串
+          let optionsArray = [];
+          if (question.options.startsWith('[') && question.options.endsWith(']')) {
+            // 如果是JSON格式的字符串
+            optionsArray = JSON.parse(question.options);
+          } else {
+            // 如果是逗号分隔的字符串
+            optionsArray = question.options.split(',');
+          }
+          
+          options = optionsArray.map(opt => {
+            const cleanOpt = typeof opt === 'string' ? opt.trim().replace(/^"|"$/g, '') : opt;
+            return {
+              optionKey: cleanOpt,
+              optionValue: cleanOpt
+            };
+          });
+        } catch (e) {
+          console.error('解析选项失败:', e, question.options);
+          // 安全的回退方式
+          options = [
+            { optionKey: 'A', optionValue: 'A' },
+            { optionKey: 'B', optionValue: 'B' },
+            { optionKey: 'C', optionValue: 'C' },
+            { optionKey: 'D', optionValue: 'D' }
+          ];
+        }
+      }
+      
+      return {
+        questionId: question.numSort,
+        questionTitle: question.question,
+        questionType: questionType,
+        options: options,
+        score: question.score,
+        answer: question.userAnswer
+      };
+    },
+    
     // 上一题
     prevQuestion() {
       if (this.currentQuestionIndex > 0) {
-        const prevQuestionId = this.questions[this.currentQuestionIndex - 1].questionId;
-        this.switchQuestion(prevQuestionId);
+        const prevQuestion = this.examInfo.questionVoList[this.currentQuestionIndex - 1];
+        if (prevQuestion) {
+          this.switchQuestion(prevQuestion.numSort);
+        }
       }
     },
     
     // 下一题
     nextQuestion() {
-      if (this.currentQuestionIndex < this.questions.length - 1) {
-        const nextQuestionId = this.questions[this.currentQuestionIndex + 1].questionId;
-        this.switchQuestion(nextQuestionId);
+      if (this.currentQuestionIndex < this.examInfo.questionVoList.length - 1) {
+        const nextQuestion = this.examInfo.questionVoList[this.currentQuestionIndex + 1];
+        if (nextQuestion) {
+          this.switchQuestion(nextQuestion.numSort);
+        }
       }
     },
     
@@ -327,34 +437,37 @@ export default {
         ? this.currentAnswerMultiple.join(',') 
         : this.currentAnswer;
       
-      this.submitAnswer(this.currentQuestion.questionId, answer);
+      // 找到当前问题在原始数据中的索引
+      const index = this.examInfo.questionVoList.findIndex(q => q.numSort === this.currentQuestion.questionId);
+      if (index !== -1) {
+        // 更新原始数据中的答案，但不提交
+        this.examInfo.questionVoList[index].userAnswer = answer;
+      }
     },
     
     // 提交单个题目答案
     submitAnswer(questionId, answer) {
-      axios.post('/exam-page-user/submitAnswer', {
-        examId: this.examId,
-        questionId: questionId,
-        answer: answer
-      })
-        .then(response => {
-          if (response.data && response.data.state === 'ok') {
-            // 更新答题进度
-            this.updateQuestionProgress(questionId, '2'); // 设置为已完成
-            
-            // 更新本地题目答案
-            const questionIndex = this.questions.findIndex(q => q.questionId === questionId);
-            if (questionIndex !== -1) {
-              this.questions[questionIndex].answer = answer;
-            }
-          } else {
-            this.$message.error(response.data.msg || '提交答案失败');
-          }
+      return new Promise((resolve, reject) => {
+        axios.post('/exam-page-user/submitAnswer', {
+          examId: this.examId,
+          questionId: questionId,
+          answer: answer
         })
-        .catch(error => {
-          console.error('提交答案失败:', error);
-          this.$message.error('提交答案失败');
-        });
+          .then(response => {
+            if (response.data && response.data.state === 'ok') {
+              console.log(`题目${questionId}提交成功`, answer);
+              resolve(response.data);
+            } else {
+              this.$message.error(response.data.msg || '提交答案失败');
+              reject(new Error(response.data.msg || '提交答案失败'));
+            }
+          })
+          .catch(error => {
+            console.error('提交答案失败:', error);
+            this.$message.error('提交答案失败');
+            reject(error);
+          });
+      });
     },
     
     // 更新题目进度状态
@@ -367,7 +480,8 @@ export default {
     
     // 获取已完成的题目数量
     getCompletedCount() {
-      return this.questionProgress.filter(p => p.answerStatus === '2').length;
+      if (!this.examInfo.questionVoList) return 0;
+      return this.examInfo.questionVoList.filter(q => q.userAnswer && q.userAnswer.length > 0).length;
     },
     
     // 获取题目状态文本
@@ -383,7 +497,7 @@ export default {
     // 交卷
     submitExam() {
       // 检查是否有未完成的题目
-      const uncompleted = this.questionProgress.filter(p => p.answerStatus !== '2');
+      const uncompleted = this.examInfo.questionVoList.filter(q => !q.userAnswer || q.userAnswer.length === 0);
       
       if (uncompleted.length > 0) {
         this.$confirm({
@@ -404,7 +518,7 @@ export default {
     doSubmitExam() {
       this.submitting = true;
       
-      axios.post('/exam-page-user/submitExam', {
+      axios.post('/annotation/exam-page-user/submitExam', {
         examId: this.examId
       })
         .then(response => {
@@ -481,6 +595,75 @@ export default {
     // 返回考试列表
     goToExamList() {
       this.$router.push({ name: 'ExamList' });
+    },
+    
+    // 获取题目类型文本
+    getQuestionTypeText(shape) {
+      const typeMap = {
+        '100': '单选题',
+        '200': '多选题',
+        '300': '填空题',
+        '400': '简答题',
+        '500': '简答题',
+        '600': '操作题'
+      };
+      return typeMap[shape] || '未知类型';
+    },
+    
+    // 更新剩余时间
+    updateRemainingTime() {
+      // 实现更新剩余时间的逻辑
+    },
+    
+    // 提交当前答案
+    submitCurrentAnswer() {
+      if (!this.currentQuestion) return;
+      
+      this.submitLoading = true;
+      
+      const answer = this.currentQuestion.questionType === 2 
+        ? this.currentAnswerMultiple.join(',') 
+        : this.currentAnswer;
+      
+      this.submitAnswer(this.currentQuestion.questionId, answer)
+        .then(() => {
+          this.$message.success('答案提交成功');
+          
+          // 如果还有下一题，自动跳到下一题
+          if (this.currentQuestionIndex < this.examInfo.questionVoList.length - 1) {
+            this.nextQuestion();
+          }
+        })
+        .finally(() => {
+          this.submitLoading = false;
+        });
+    },
+    
+    // 获取原始题目数据
+    getOriginalQuestion(questionId) {
+      return this.examInfo.questionVoList.find(q => q.numSort === questionId);
+    },
+    
+    // 判断是否为操作题
+    isOperationQuestion() {
+      if (!this.currentQuestion) return false;
+      
+      const question = this.getOriginalQuestion(this.currentQuestion.questionId);
+      return question && question.shape === '500';
+    },
+    
+    // 开始操作
+    startOperation() {
+      if (!this.isOperationQuestion()) return;
+      
+      const question = this.getOriginalQuestion(this.currentQuestion.questionId);
+      if (question) {
+        // 跳转到操作系统，将题目ID传递过去
+        const operationUrl = `/operation/${this.examId}/${question.numSort}`;
+        
+        // 在新窗口打开操作页面
+        window.open(operationUrl, '_blank');
+      }
     }
   }
 };
@@ -652,17 +835,70 @@ export default {
   margin-bottom: 16px;
 }
 
+.option-text {
+  display: flex;
+}
+
 .option-key {
   margin-right: 8px;
   font-weight: bold;
+  flex-shrink: 0;
+  min-width: 20px;
+}
+
+.option-value {
+  flex: 1;
+}
+
+/* 确保多选框对齐 */
+.ant-checkbox-wrapper {
+  display: flex;
+  align-items: flex-start;
+}
+
+.ant-checkbox {
+  top: 2px;
+  margin-right: 8px;
+}
+
+/* 单选按钮和多选框统一对齐 */
+.question-options .ant-radio-wrapper,
+.question-options .ant-checkbox-wrapper {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 16px;
+  margin-left: 0;
+  width: 100%;
 }
 
 .question-actions {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-top: 24px;
   padding-top: 24px;
   border-top: 1px solid #f0f0f0;
+}
+
+.left-buttons {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.center-buttons {
+  flex: 2;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.right-buttons {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .no-question {
@@ -715,5 +951,20 @@ export default {
 
 .result-actions {
   margin-top: 24px;
+}
+
+.operation-instructions {
+  margin: 24px 0;
+}
+
+.operation-btn-container {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.operation-btn-container .ant-btn {
+  min-width: 160px;
+  height: 48px;
+  font-size: 16px;
 }
 </style> 

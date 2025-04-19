@@ -69,6 +69,11 @@
                 :status="getProgressStatus(record)" 
                 :format="percent => `${percent}%`"
               />
+              <div v-if="record.progressData" class="progress-details">
+                <span>总数: {{ record.progressData.all }}</span>
+                <span style="margin: 0 8px;">已完成: {{ record.progressData.finish }}</span>
+                <span>待处理: {{ record.progressData.ing }}</span>
+              </div>
             </div>
             <span v-else>未开始</span>
           </template>
@@ -1054,18 +1059,29 @@ export default {
         .then(response => {
           if (response.data && response.data.state === 'ok') {
             const progressData = response.data.data;
-            const percent = progressData.percent;
+            
+            // 计算进度百分比：已完成部分占总量的比例
+            const all = progressData.all || 0;
+            const finish = progressData.finish || 0;
+            const percent = all > 0 ? Math.round((finish / all) * 100) : 0;
             
             // 更新考试列表中对应记录的进度
             const index = this.examList.findIndex(item => item.id === examId);
             if (index !== -1) {
               this.$set(this.examList[index], 'rollProgress', percent);
+              // 保存完整进度数据，用于显示详情
+              this.$set(this.examList[index], 'progressData', progressData);
             }
             
-            // 如果进度为100%，停止轮询
-            if (percent === 100) {
+            // 如果 isOver 为 1（表示已完成）或进度为100%，停止轮询
+            if (progressData.isOver === 1 || percent === 100) {
               this.stopPollingProgress(examId);
               this.$message.success('组卷完成');
+              
+              // 确保进度显示为100%
+              if (index !== -1) {
+                this.$set(this.examList[index], 'rollProgress', 100);
+              }
             }
           } else {
             // 查询失败，停止轮询
@@ -1163,5 +1179,11 @@ export default {
   display: block;
   margin-top: 8px;
   color: #999;
+}
+
+.progress-details {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
 }
 </style> 
