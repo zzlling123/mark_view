@@ -1,15 +1,15 @@
 <template>
   <div class="class-management">
     <h2>班级管理</h2>
-    
+
     <div class="content-container">
       <!-- 搜索区域 -->
       <a-card :bordered="false" class="search-card">
         <a-form layout="inline">
           <a-form-item label="班级名称">
-            <a-input 
-              v-model="searchParams.className" 
-              placeholder="请输入班级名称" 
+            <a-input
+              v-model="searchParams.className"
+              placeholder="请输入班级名称"
               allowClear
               @pressEnter="handleSearch"
             />
@@ -24,7 +24,7 @@
           </a-form-item>
         </a-form>
       </a-card>
-      
+
       <!-- 表格区域 -->
       <a-card :bordered="false" style="margin-top: 16px">
         <div class="table-operations">
@@ -32,7 +32,7 @@
             <a-icon type="plus" />新增班级
           </a-button>
         </div>
-        
+
         <a-table
           :columns="columns"
           :dataSource="classList"
@@ -54,7 +54,7 @@
         </a-table>
       </a-card>
     </div>
-    
+
     <!-- 添加/编辑班级对话框 -->
     <a-modal
       :title="modalTitle"
@@ -73,18 +73,33 @@
         <a-form-model-item label="班级名称" prop="className">
           <a-input v-model="classForm.className" placeholder="请输入班级名称" />
         </a-form-model-item>
-        
+
         <a-form-model-item label="班级描述" prop="description">
-          <a-textarea 
-            v-model="classForm.description" 
-            :rows="4" 
+          <a-textarea
+            v-model="classForm.description"
+            :rows="4"
             placeholder="请输入班级描述"
           />
         </a-form-model-item>
-        
-        <a-form-model-item label="班主任" prop="directorName">
-          <a-input v-model="classForm.directorName" placeholder="请输入班主任姓名" />
+
+        <a-form-model-item label="班主任" prop="directorId">
+          <a-select
+              v-model="classForm.directorId"
+              placeholder="请选择班主任"
+              style="width: 100%"
+          >
+            <a-select-option
+                v-for="item in directorList"
+                :key="item.id"
+                :value="item.id"
+            >
+              {{ item.realName }}
+            </a-select-option>
+          </a-select>
         </a-form-model-item>
+<!--        <a-form-model-item label="班主任" prop="directorName">-->
+<!--          <a-input v-model="classForm.directorName" placeholder="请输入班主任姓名" />-->
+<!--        </a-form-model-item>-->
       </a-form-model>
     </a-modal>
   </div>
@@ -170,42 +185,47 @@ export default {
         description: [
           { max: 200, message: '班级描述不能超过200个字符', trigger: 'blur' }
         ],
+        directorId: [
+          { required: true, message: '请选择班主任', trigger: 'change' },
+        ],
         directorName: [
           { required: true, message: '请输入班主任姓名', trigger: 'blur' },
           { max: 20, message: '班主任姓名不能超过20个字符', trigger: 'blur' }
         ],
       },
+      directorList:[]
     };
   },
   created() {
     this.fetchClassList();
+    this.fetchTeacherList();
   },
   methods: {
     // 获取班级列表
     fetchClassList() {
       this.loading = true;
-      
+
       const params = {
         pageInfo: {
           page: this.pagination.current,
           pageSize: this.pagination.pageSize,
         },
       };
-      
+
       // 添加搜索条件
       if (this.searchParams.className) {
         params.className = this.searchParams.className;
       }
-      
+
       // 发送请求
       axios.post(API.CLASS.PAGE, params)
         .then(response => {
           if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
             const data = response.data.data || {};
-            
+
             // 设置班级列表数据
             this.classList = data.records || []; // 从records获取数据列表
-            
+
             // 更新分页信息
             this.pagination.total = data.total || 0;      // 直接使用total作为总记录数
             this.pagination.current = data.current || 1;  // 直接使用current作为当前页码
@@ -222,13 +242,28 @@ export default {
           this.loading = false;
         });
     },
-    
+
+    //获取班主任
+    fetchTeacherList() {
+      axios.post(API.USER.GET_USER_LIST)
+        .then(response => {
+          if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
+            this.directorList = response.data.data || [];
+          } else {
+            this.$message.error(response.data?.msg || '获取班主任列表失败');
+          }
+        })
+        .catch(error => {
+          console.error('获取班主任列表失败:', error);
+          this.$message.error('获取班主任列表失败，请稍后重试');
+        });
+    },
     // 处理搜索
     handleSearch() {
       this.pagination.current = 1; // 重置到第一页
       this.fetchClassList();
     },
-    
+
     // 处理重置
     handleReset() {
       this.searchParams = {
@@ -237,14 +272,14 @@ export default {
       this.pagination.current = 1;
       this.fetchClassList();
     },
-    
+
     // 处理表格变化（排序、分页）
     handleTableChange(pagination, filters, sorter) {
       this.pagination.current = pagination.current;
       this.pagination.pageSize = pagination.pageSize;
       this.fetchClassList();
     },
-    
+
     // 处理添加班级
     handleAdd() {
       this.modalTitle = '新增班级';
@@ -258,15 +293,15 @@ export default {
       };
       this.modalVisible = true;
     },
-    
+
     // 处理编辑班级
     handleEdit(record) {
       this.modalTitle = '编辑班级';
       this.isEdit = true;
-      this.classForm = { ...record };
+      this.classForm = { ...record,directorId: record.directorId ? record.directorId.toString() : '', };
       this.modalVisible = true;
     },
-    
+
     // 处理删除班级
     handleDelete(record) {
       this.$confirm({
@@ -281,11 +316,11 @@ export default {
         },
       });
     },
-    
+
     // 调用删除班级API
     deleteClass(id) {
       this.loading = true;
-      
+
       axios.post(`${API.CLASS.DELETE}${id}`)
         .then(response => {
           if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
@@ -303,16 +338,16 @@ export default {
           this.loading = false;
         });
     },
-    
+
     // 处理模态框确认
     handleModalOk() {
       this.$refs.classForm.validate(valid => {
         if (valid) {
           this.modalLoading = true;
-          
+
           // 根据是否是编辑模式，调用不同的API
           const apiUrl = this.isEdit ? API.CLASS.UPDATE : API.CLASS.SAVE;
-          
+
           axios.post(apiUrl, this.classForm)
             .then(response => {
               if (response.data && (response.data.state === 'ok' || response.data.code === 200)) {
@@ -333,7 +368,7 @@ export default {
         }
       });
     },
-    
+
     // 处理模态框取消
     handleModalCancel() {
       this.modalVisible = false;
@@ -369,4 +404,4 @@ export default {
 .action-buttons button {
   padding: 0 8px;
 }
-</style> 
+</style>

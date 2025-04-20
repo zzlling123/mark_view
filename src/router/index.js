@@ -14,6 +14,14 @@ import LabelManagement from '../views/LabelManagement.vue'
 import ExamManagement from '../views/ExamManagement.vue'
 import ExamList from '../views/ExamList.vue'
 import ExamPage from '../views/ExamPage.vue'
+import CourseList from '../views/Course/CourseList.vue'
+import ChapterList from '../views/Course/ChapterList.vue'
+import ResourceList from '../views/Course/ResourceList.vue'
+import MyCorrect from '../views/Exam/MyCorrect.vue'
+import StudentList from '../views/Exam/StudentList.vue'
+import AnswerDetails from '../views/Exam/AnswerDetails.vue'
+import DictList from '../views/System/DictList.vue'
+import MenuList from '../views/System/MenuList.vue'
 
 Vue.use(VueRouter)
 
@@ -107,7 +115,50 @@ const routes = [
         name: 'ExamPage',
         component: ExamPage,
         meta: { title: '答题页面' }
-      }
+      },
+      {
+        path: 'course-list',
+        name: 'CourseList',
+        component: CourseList,
+        meta: { title: '课程管理' }
+      },
+      {
+        path: 'chapter-list/:courseId',
+        name: 'ChapterList',
+        component: ChapterList,
+        meta: { title: '章节信息' }
+      },
+      {
+        path: 'resource-list/:chapterId',
+        name: 'ResourceList',
+        component: ResourceList,
+        meta: { title: '章节资源' }
+      },{
+        path: 'my-correct',
+        name: 'MyCorrect',
+        component: MyCorrect,
+        meta: { title: '我的批改' }
+      },{
+        path: 'student-list/:examId&:classId',
+        name: 'StudentList',
+        component: StudentList,
+        meta: { title: '考试学生' }
+      },{
+        path: 'answer_details/:examPageUserId',
+        name: 'AnswerDetails',
+        component: AnswerDetails,
+        meta: { title: '批改' }
+      },{
+        path: 'dict-list',
+        name: 'DictList',
+        component: DictList,
+        meta: { title: '字典管理' }
+      },{
+        path: 'menu-list',
+        name: 'MenuList',
+        component: MenuList,
+        meta: { title: '菜单管理' }
+      },
     ]
   },
   {
@@ -125,18 +176,18 @@ const router = new VueRouter({
 router.beforeEach((to, from, next) => {
   // 检查是否已登录
   const isAuthenticated = localStorage.getItem('token')
-  
+
   // 如果未登录且不是去登录页，则重定向到登录页
   if (to.path !== '/login' && !isAuthenticated) {
     next('/login')
-  } 
+  }
   // 如果已登录且要去登录页，则重定向到首页
   else if (to.path === '/login' && isAuthenticated) {
     next('/user-management')
-  } 
+  }
   else {
     next()
   }
 })
 
-export default router 
+export default router

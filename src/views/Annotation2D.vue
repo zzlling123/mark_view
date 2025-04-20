@@ -1,7 +1,7 @@
 <template>
   <div class="annotation-2d">
     <h2>2D标注任务</h2>
-    
+
     <div class="content-container">
       <a-row :gutter="16">
         <a-col :span="16">
@@ -26,7 +26,7 @@
                   </div>
                 </a-upload>
               </div>
-              
+
               <!-- 标注画布区域 -->
               <div v-else class="annotation-canvas-container">
                 <div class="canvas-tools">
@@ -41,35 +41,35 @@
                       <a-icon type="delete" /> 删除
                     </a-radio-button>
                   </a-radio-group>
-                  
-                  <a-button 
-                    type="primary" 
+
+                  <a-button
+                    type="primary"
                     style="margin-left: 16px;"
                     @click="clearCanvas"
                   >
                     <a-icon type="delete" /> 清空标注
                   </a-button>
-                  
-                  <a-button 
-                    type="danger" 
+
+                  <a-button
+                    type="danger"
                     style="margin-left: 8px;"
                     @click="removeImage"
                   >
                     <a-icon type="close-circle" /> 移除图片
                   </a-button>
                 </div>
-                
+
                 <div class="canvas-wrapper" ref="canvasWrapper">
-                  <canvas 
-                    ref="annotationCanvas" 
+                  <canvas
+                    ref="annotationCanvas"
                     @mousedown="handleMouseDown"
                     @mousemove="handleMouseMove"
                     @mouseup="handleMouseUp"
                     @mouseleave="handleMouseLeave"
                   ></canvas>
-                  <img 
-                    ref="annotationImage" 
-                    :src="imageUrl" 
+                  <img
+                    ref="annotationImage"
+                    :src="imageUrl"
                     style="display: none;"
                     @load="initCanvas"
                   />
@@ -78,7 +78,7 @@
             </div>
           </a-card>
         </a-col>
-        
+
         <a-col :span="8">
           <a-card title="标注信息" :bordered="true">
             <div v-if="imageUrl">
@@ -87,15 +87,15 @@
                 <p>尺寸: {{ imageWidth }} x {{ imageHeight }} 像素</p>
                 <p>标注数量: {{ annotationBoxes.length }}</p>
               </div>
-              
+
               <a-divider />
-              
+
               <div class="info-section">
                 <h3>标注列表</h3>
                 <a-empty v-if="annotationBoxes.length === 0" description="暂无标注" />
                 <a-list v-else size="small" bordered>
-                  <a-list-item 
-                    v-for="(box, index) in annotationBoxes" 
+                  <a-list-item
+                    v-for="(box, index) in annotationBoxes"
                     :key="index"
                     :class="{ 'selected-item': selectedBoxIndex === index }"
                     @click="selectBox(index)"
@@ -113,32 +113,32 @@
                     </div>
                   </a-list-item>
                 </a-list>
-                
-                <a-button 
-                  type="primary" 
-                  style="margin-top: 10px; width: 100%;" 
-                  icon="code" 
+
+                <a-button
+                  type="primary"
+                  style="margin-top: 10px; width: 100%;"
+                  icon="code"
                   @click="printAnnotationData"
                 >
                   打印标注数据到控制台
                 </a-button>
               </div>
-              
+
               <a-divider />
-              
+
               <div class="info-section" v-if="selectedBoxIndex !== null">
                 <h3>标签设置</h3>
                 <a-form layout="vertical">
                   <a-form-item label="标签名称">
-                    <a-input 
+                    <a-input
                       v-model="annotationBoxes[selectedBoxIndex].label"
                       placeholder="请输入标签名称"
                       @change="redrawCanvas"
                     />
                   </a-form-item>
                   <a-form-item label="标签颜色">
-                    <a-select 
-                      v-model="annotationBoxes[selectedBoxIndex].color" 
+                    <a-select
+                      v-model="annotationBoxes[selectedBoxIndex].color"
                       style="width: 100%"
                       @change="redrawCanvas"
                     >
@@ -156,7 +156,7 @@
           </a-card>
         </a-col>
       </a-row>
-      
+
       <a-row style="margin-top: 16px">
         <a-col :span="24">
           <a-card title="操作说明" :bordered="true">
@@ -224,57 +224,57 @@ export default {
     initCanvas() {
       const img = this.$refs.annotationImage;
       const canvasWrapper = this.$refs.canvasWrapper;
-      
+
       // 调整 canvas 尺寸以适应图片
       this.imageWidth = img.naturalWidth;
       this.imageHeight = img.naturalHeight;
-      
+
       // 限制最大显示尺寸
       const maxWidth = canvasWrapper.clientWidth;
       const maxHeight = 500;
-      
+
       let displayWidth = this.imageWidth;
       let displayHeight = this.imageHeight;
-      
+
       if (displayWidth > maxWidth) {
         const ratio = maxWidth / displayWidth;
         displayWidth = maxWidth;
         displayHeight = displayHeight * ratio;
       }
-      
+
       if (displayHeight > maxHeight) {
         const ratio = maxHeight / displayHeight;
         displayHeight = maxHeight;
         displayWidth = displayWidth * ratio;
       }
-      
+
       const canvas = this.$refs.annotationCanvas;
       canvas.width = displayWidth;
       canvas.height = displayHeight;
-      
+
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
-      
+
       this.redrawCanvas();
     },
     redrawCanvas() {
       if (!this.canvas || !this.ctx) return;
-      
+
       const ctx = this.ctx;
       const img = this.$refs.annotationImage;
-      
+
       // 清除画布
       ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      
+
       // 绘制图片
       ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
-      
+
       // 绘制所有标注框
       this.annotationBoxes.forEach((box, index) => {
         ctx.strokeStyle = box.color || 'blue';
         ctx.lineWidth = index === this.selectedBoxIndex ? 3 : 2;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
-        
+
         // 绘制标签文本
         if (box.label) {
           ctx.fillStyle = box.color || 'blue';
@@ -284,26 +284,26 @@ export default {
           ctx.fillText(box.label, box.x + 5, box.y - 5);
         }
       });
-      
+
       // 绘制正在绘制的框
       if (this.isDrawing && this.drawingBox) {
         ctx.strokeStyle = 'blue';
         ctx.lineWidth = 2;
         ctx.strokeRect(
-          this.drawingBox.x, 
-          this.drawingBox.y, 
-          this.drawingBox.width, 
+          this.drawingBox.x,
+          this.drawingBox.y,
+          this.drawingBox.width,
           this.drawingBox.height
         );
       }
     },
     handleMouseDown(e) {
       if (!this.canvas) return;
-      
+
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      
+
       if (this.currentTool === 'rectangle') {
         this.isDrawing = true;
         this.startX = x;
@@ -315,9 +315,9 @@ export default {
         for (let i = this.annotationBoxes.length - 1; i >= 0; i--) {
           const box = this.annotationBoxes[i];
           if (
-            x >= box.x && 
-            x <= box.x + box.width && 
-            y >= box.y && 
+            x >= box.x &&
+            x <= box.x + box.width &&
+            y >= box.y &&
             y <= box.y + box.height
           ) {
             this.selectedBoxIndex = i;
@@ -325,11 +325,11 @@ export default {
             break;
           }
         }
-        
+
         if (!found) {
           this.selectedBoxIndex = null;
         }
-        
+
         this.redrawCanvas();
       } else if (this.currentTool === 'delete' && this.selectedBoxIndex !== null) {
         this.annotationBoxes.splice(this.selectedBoxIndex, 1);
@@ -339,11 +339,11 @@ export default {
     },
     handleMouseMove(e) {
       if (!this.isDrawing || !this.canvas) return;
-      
+
       const rect = this.canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-      
+
       if (this.currentTool === 'rectangle') {
         this.drawingBox.width = x - this.startX;
         this.drawingBox.height = y - this.startY;
@@ -352,7 +352,7 @@ export default {
     },
     handleMouseUp(e) {
       if (!this.isDrawing || !this.canvas) return;
-      
+
       if (this.currentTool === 'rectangle') {
         // 完成绘制矩形
         if (Math.abs(this.drawingBox.width) > 5 && Math.abs(this.drawingBox.height) > 5) {
@@ -365,12 +365,12 @@ export default {
             label: '未命名',
             color: 'blue'
           };
-          
+
           this.annotationBoxes.push(newBox);
           this.selectedBoxIndex = this.annotationBoxes.length - 1;
         }
       }
-      
+
       this.isDrawing = false;
       this.drawingBox = null;
       this.redrawCanvas();
@@ -416,21 +416,21 @@ export default {
       // 打印标注数据到控制台
       console.log('2D标注数据结构:');
       console.log(JSON.stringify(this.annotationBoxes, null, 2));
-      
+
       // 统计信息
       const stats = {
         总标注数: this.annotationBoxes.length,
         标签统计: {}
       };
-      
+
       this.annotationBoxes.forEach(box => {
         const label = box.label || '未命名';
         stats.标签统计[label] = (stats.标签统计[label] || 0) + 1;
       });
-      
+
       console.log('标注统计信息:');
       console.log(stats);
-      
+
       this.$message.success('标注数据已打印到控制台，请按F12查看');
     }
   }
@@ -507,4 +507,4 @@ canvas {
 .selected-item {
   background-color: #e6f7ff;
 }
-</style> 
+</style>
